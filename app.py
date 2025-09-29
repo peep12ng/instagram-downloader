@@ -4,7 +4,7 @@ app = Flask(__name__)
 
 @app.route('/')
 def index():
-    return "Hello, World! Flask 서버가 실행 중입니다."
+    return render_template('index.html')
 
 if __name__ == '__main__':
     app.run(debug=True)
