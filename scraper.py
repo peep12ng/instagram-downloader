@@ -29,12 +29,6 @@ async def scrape_profile_page(username: str) -> List[str]:
             # 인스타그램 프로필 페이지로 이동
             await page.goto(f"https://www.instagram.com/{username}/", timeout=60000)
 
-            # 2. 여기서 코드를 일시정지하고 Playwright Inspector를 엽니다.
-            print("\n>>> 디버깅 모드: Playwright Inspector가 실행됩니다. 브라우저와 Inspector 창을 확인하세요.")
-            print(">>> Inspector에서 'Explore' 버튼으로 요소를 탐색하거나, 콘솔에서 locator를 테스트할 수 있습니다.")
-            print(">>> 계속 진행하려면 Inspector에서 'Resume' 버튼(▶)을 누르세요.\n")
-            # await page.pause()
-
             # 계정 없음 오류 확인 (더 안정적인 text selector 사용)
             not_found_locator = page.locator("text=/Sorry, this page isn't available/i")
             if await not_found_locator.is_visible():
