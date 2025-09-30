@@ -1,3 +1,5 @@
 Flask
 playwright
 pytest
+beautifulsoup4
+lxml
