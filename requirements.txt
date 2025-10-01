@@ -1,5 +1,6 @@
-Flask
+flask
 playwright
-pytest
 beautifulsoup4
 lxml
+pytest
+pytest-asyncio

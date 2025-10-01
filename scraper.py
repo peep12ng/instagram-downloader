@@ -3,6 +3,7 @@ import asyncio
 from playwright.async_api import async_playwright
 from bs4 import BeautifulSoup
 from typing import List
+from browser_manager import get_authenticated_page, CookieFileNotFoundException
 
 # 사용자 정의 예외
 class ProfileNotFoundException(Exception):
@@ -21,24 +22,25 @@ async def scrape_profile_page(username: str) -> List[str]:
     print(f"'{username}' 계정 스크래핑 시작...")
 
     async with async_playwright() as p:
-        # 1. headless=False로 변경하여 실제 브라우저 창을 띄웁니다.
-        browser = await p.chromium.launch(headless=True) 
-        try:
-            page = await browser.new_page()
-
+        async with get_authenticated_page(p) as page:
             # 인스타그램 프로필 페이지로 이동
             await page.goto(f"https://www.instagram.com/{username}/", timeout=60000)
 
-            # 계정 없음 오류 확인 (더 안정적인 text selector 사용)
+            # 계정 없음 오류 확인(더 안정적인 text selector 사용)
             not_found_locator = page.locator("text=/Sorry, this page isn't available/i")
             if await not_found_locator.is_visible():
                 raise ProfileNotFoundException(f"'{username}' 계정을 찾을 수 없습니다.")
             
-            # 비공개 계정 오류 확인 (태그에 의존하지 않고 텍스트 내용으로만 확인하여 안정성 향상)
-            private_locator = page.locator("text=/This Account is Private|비공개 계정입니다/i")
-            if await private_locator.is_visible():
-                raise ProfileIsPrivateException(f"'{username}' 계정은 비공개입니다.")
-    
+            # 게시물 링크가 하나도 없는지 확인하여 비공개/게시물 없는 계정 감지
+            # 공개 프로필에는 항상 '/p/'로 시작하는 게시물 링크(a 태그)가 존재
+            # 잠시 기다려 페이지가 로드될 시간을 제공
+            await page.wait_for_timeout(2000)
+            post_locator = page.locator(f"a[href^='/{username}/p/']")
+
+            # 게시물 요소가 하나도 없다면 비공개 계정으로 간주.
+            if await post_locator.count() == 0:
+                raise ProfileIsPrivateException(f"'{username}' 계정은 비공개이거나 게시물이 없습니다.")
+            
             print("페이지 스크롤 시작...")
             # 페이지의 모든 게시물을 로드하기 위해 아래로 스크롤
             last_height = await page.evaluate("document.body.scrollHeight")
@@ -49,8 +51,8 @@ async def scrape_profile_page(username: str) -> List[str]:
                 if new_height == last_height:
                     break
                 last_height = new_height
-            
-            print("페이지 스크롤 완료.")
+
+            print("페이지 스크롤 완료")
 
             # 스크롤 후 최종 페이지 콘텐츠 다시 가져오기
             final_page_content = await page.content()
@@ -65,11 +67,9 @@ async def scrape_profile_page(username: str) -> List[str]:
                 # 'src' 속성이 있고, CDN 주소 형식을 포함하는 경우만 추출(인스타그램 게시물-CDN 주소 형식 포함)
                 if 'src' in img.attrs and 'scontent' in img['src']:
                     image_urls.add(img['src'])
-            
+
             print(f"총 {len(image_urls)}개의 고유한 이미지 URL을 찾았습니다.")
             return list(image_urls)
-        finally:
-            await browser.close() # 성공하든 실패하던 항상 브라우저를 닫습니다.
 
 # 직접 실행하여 테스트 python scraper.py
 if __name__ == '__main__':
@@ -78,5 +78,5 @@ if __name__ == '__main__':
     try:
         image_urls = asyncio.run(scrape_profile_page(test_username))
         print(f"총 {len(image_urls)}개의 이미지를 성공적으로 스크랩했습니다.")
-    except (ProfileNotFoundException, ProfileIsPrivateException) as e:
+    except (ProfileNotFoundException, ProfileIsPrivateException, CookieFileNotFoundException) as e:
         print(f"오류: {e}")
