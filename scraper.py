@@ -28,6 +28,7 @@ async def scrape_profile_page(username: str) -> List[str]:
 
             # 계정 없음 오류 확인(더 안정적인 text selector 사용)
             not_found_locator = page.locator("text=/Sorry, this page isn't available/i")
+
             if await not_found_locator.is_visible():
                 raise ProfileNotFoundException(f"'{username}' 계정을 찾을 수 없습니다.")
             
