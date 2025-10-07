@@ -27,7 +27,7 @@ credentials.json
 /instagram_cookies.json
 
 # Documentation (for PRD/tasks)
-/docs/
+!docs/
 
 # OS-generated files
 .DS_Store
