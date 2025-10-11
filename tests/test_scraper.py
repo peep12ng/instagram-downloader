@@ -1,9 +1,49 @@
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
-from scraper import scrape_profile_page, ProfileNotFoundException, ProfileIsPrivateException
+from src.scraper import scrape_profile_page, ProfileNotFoundException, ProfileIsPrivateException
 
 @pytest.mark.asyncio
-@patch('scraper.get_authenticated_page')
+@patch('src.scraper.get_authenticated_page')
+async def test_scrape_profile_page_success(mock_get_authenticated_page):
+    """
+    정상적인 프로필 페이지에서 스크래핑이 성공하는 경우를 테스트합니다.
+    """
+    # --- Arrange (준비) ---
+    username = "test_user"
+    # 가짜 HTML 페이지 내용
+    mock_html_content = """
+    <html><body>
+        <a href="/test_user/p/C123"></a>
+        <img src="https://scontent.cdn.instagram.com/image1.jpg">
+        <img src="https://scontent.cdn.instagram.com/image2.jpg">
+        <img src="/some/other/image.png">
+    </body></html>
+    """
+
+    # Playwright의 page 객체와 그 안의 함수들을 가짜(Mock)로 만듭니다.
+    mock_not_found_locator = AsyncMock()
+    mock_not_found_locator.is_visible.return_value = False
+    mock_post_locator = AsyncMock()
+    mock_post_locator.count.return_value = 1
+
+    mock_page = AsyncMock()
+    mock_page.locator = MagicMock(side_effect=[mock_not_found_locator, mock_post_locator])
+    mock_page.evaluate.side_effect = [1000, None, 1000] # 스크롤이 끝까지 내려간 것처럼 시뮬레이션
+    mock_page.content.return_value = mock_html_content
+
+    mock_get_authenticated_page.return_value.__aenter__.return_value = mock_page
+
+    # --- Act (실행) ---
+    image_urls = await scrape_profile_page(username)
+
+    # --- Assert (검증) ---
+    assert len(image_urls) == 2
+    assert "https://scontent.cdn.instagram.com/image1.jpg" in image_urls
+    assert "https://scontent.cdn.instagram.com/image2.jpg" in image_urls
+
+
+@pytest.mark.asyncio
+@patch('src.scraper.get_authenticated_page')
 async def test_scrape_profile_page_not_found(mock_get_authenticated_page):
     """
     '계정 없음' 페이지를 만났을 때 ProfileNotFoundException을 발생시키는지 테스트합니다.
@@ -24,7 +64,7 @@ async def test_scrape_profile_page_not_found(mock_get_authenticated_page):
         await scrape_profile_page("not_a_real_user")
 
 @pytest.mark.asyncio
-@patch('scraper.get_authenticated_page')
+@patch('src.scraper.get_authenticated_page')
 async def test_scrape_profile_page_is_private(mock_get_authenticated_page):
     """
     비공개 계정 페이지를 만났을 때 ProfileIsPrivateException을 발생시키는지 테스트합니다.

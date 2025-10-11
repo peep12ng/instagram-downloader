@@ -3,11 +3,12 @@ import zipfile
 import io
 from unittest.mock import patch, MagicMock, AsyncMock
 
-from utils import download_images_as_bytes, create_zip_in_memory
+from src.utils import download_images_as_bytes, create_zip_in_memory
 
 @pytest.mark.asyncio
-@patch('utils.aiohttp.ClientSession')
+@patch('src.utils.aiohttp.ClientSession')
 async def test_download_images_as_bytes_success(mock_ClientSession):
+
     """
     이미지 다운로드가 성공하는 경우를 테스트합니다.
     실제 네트워크 요청 대신 aiohttp.ClientSession을 모킹(mocking)합니다.
@@ -38,7 +39,7 @@ async def test_download_images_as_bytes_success(mock_ClientSession):
     assert data == fake_image_bytes
 
 @pytest.mark.asyncio
-@patch('utils.aiohttp.ClientSession')
+@patch('src.utils.aiohttp.ClientSession')
 async def test_download_images_as_bytes_error(mock_ClientSession):
     """
     이미지 다운로드 시 서버가 404 오류를 반환하는 경우를 테스트합니다.

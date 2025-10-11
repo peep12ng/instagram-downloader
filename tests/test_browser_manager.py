@@ -1,6 +1,6 @@
 import pytest
 from playwright.async_api import async_playwright
-from browser_manager import get_authenticated_page, CookieFileNotFoundException
+from src.browser_manager import get_authenticated_page, CookieFileNotFoundException
 
 @pytest.mark.asyncio
 async def test_get_authenticated_page_raises_error_if_cookie_file_not_found(tmp_path):
