@@ -3,7 +3,7 @@ import asyncio
 from playwright.async_api import async_playwright
 from bs4 import BeautifulSoup
 from typing import List
-from browser_manager import get_authenticated_page, CookieFileNotFoundException
+from .browser_manager import get_authenticated_page, CookieFileNotFoundException
 
 # 사용자 정의 예외
 class ProfileNotFoundException(Exception):
