@@ -1,6 +1,12 @@
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
-from src.scraper import scrape_profile_page, ProfileNotFoundException, ProfileIsPrivateException
+from playwright.async_api import TimeoutError
+from src.scraper import (
+    scrape_profile_page,
+    ProfileNotFoundException,
+    ProfileIsPrivateException,
+    ScrapeTimeoutException,
+)
 
 @pytest.mark.asyncio
 @patch('src.scraper.get_authenticated_page')
@@ -88,3 +94,25 @@ async def test_scrape_profile_page_is_private(mock_get_authenticated_page):
 
     with pytest.raises(ProfileIsPrivateException, match="'private_user' 계정은 비공개이거나 게시물이 없습니다."):
         await scrape_profile_page("private_user")
+
+@pytest.mark.asyncio
+@patch('src.scraper.get_authenticated_page')
+async def test_scrape_profile_page_timeout(mock_get_authenticated_page):
+    """
+    스크래핑 중 TimeoutError가 발생했을 때 ScrapeTimeoutException을 발생시키는지 테스트합니다.
+    """
+    # --- Arrange (준비) ---
+    # page.goto가 TimeoutError를 발생시키도록 설정
+    def raise_timeout(*args, **kwargs):
+        raise TimeoutError("Page load timed out")
+    mock_page = AsyncMock()
+    mock_page.goto.side_effect = raise_timeout
+
+    # get_authenticated_page의 컨텍스트 매니저가 이 mock_page를 반환하도록 설정
+    mock_get_authenticated_page.return_value.__aenter__.return_value = mock_page
+
+    # --- Act & Assert (실행 및 검증) ---
+    # ScrapeTimeoutException이 발생하는지 확인
+    with pytest.raises(ScrapeTimeoutException, match="'timeout_user' 계정을 스크래핑하는 중 타임아웃이 발생했습니다."):
+        await scrape_profile_page("timeout_user")
+    

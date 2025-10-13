@@ -1,6 +1,6 @@
 # 인스타그램 스크래핑을 위한 핵심 로직을 포함할 파일
 import asyncio
-from playwright.async_api import async_playwright
+from playwright.async_api import async_playwright, TimeoutError
 from bs4 import BeautifulSoup
 from typing import List
 from .browser_manager import get_authenticated_page, CookieFileNotFoundException
@@ -14,6 +14,10 @@ class ProfileIsPrivateException(Exception):
     """프로필이 비공개일 때 발생하는 예외"""
     pass
 
+class ScrapeTimeoutException(Exception):
+    """스크래핑 중 타임아웃이 발생했을 때의 예외"""
+    pass
+
 async def scrape_profile_page(username: str) -> List[str]:
     """
     주어진 인스타그램 계정 페이지로 이동하여 모든 게시물이 로드될 때까지 스크롤하고,
@@ -24,39 +28,43 @@ async def scrape_profile_page(username: str) -> List[str]:
     async with async_playwright() as p:
         async with get_authenticated_page(p) as page:
             # 인스타그램 프로필 페이지로 이동
-            await page.goto(f"https://www.instagram.com/{username}/", timeout=60000)
-
-            # 계정 없음 오류 확인(더 안정적인 text selector 사용)
-            not_found_locator = page.locator("text=/Sorry, this page isn't available/i")
-
-            if await not_found_locator.is_visible():
-                raise ProfileNotFoundException(f"'{username}' 계정을 찾을 수 없습니다.")
+            try:
+                await page.goto(f"https://www.instagram.com/{username}/", timeout=60000)
             
-            # 게시물 링크가 하나도 없는지 확인하여 비공개/게시물 없는 계정 감지
-            # 공개 프로필에는 항상 '/p/'로 시작하는 게시물 링크(a 태그)가 존재
-            # 잠시 기다려 페이지가 로드될 시간을 제공
-            await page.wait_for_timeout(2000)
-            post_locator = page.locator(f"a[href^='/{username}/p/']")
+                # 계정 없음 오류 확인(더 안정적인 text selector 사용)
+                not_found_locator = page.locator("text=/Sorry, this page isn't available/i")
 
-            # 게시물 요소가 하나도 없다면 비공개 계정으로 간주.
-            if await post_locator.count() == 0:
-                raise ProfileIsPrivateException(f"'{username}' 계정은 비공개이거나 게시물이 없습니다.")
-            
-            print("페이지 스크롤 시작...")
-            # 페이지의 모든 게시물을 로드하기 위해 아래로 스크롤
-            last_height = await page.evaluate("document.body.scrollHeight")
-            while True:
-                await page.evaluate("window.scrollTo(0, document.body.scrollHeight);")
-                await page.wait_for_timeout(2000) # 새 콘텐츠가 로드될 때까지 대기
-                new_height = await page.evaluate("document.body.scrollHeight")
-                if new_height == last_height:
-                    break
-                last_height = new_height
+                if await not_found_locator.is_visible():
+                    raise ProfileNotFoundException(f"'{username}' 계정을 찾을 수 없습니다.")
+                
+                # 게시물 링크가 하나도 없는지 확인하여 비공개/게시물 없는 계정 감지
+                # 공개 프로필에는 항상 '/p/'로 시작하는 게시물 링크(a 태그)가 존재
+                # 잠시 기다려 페이지가 로드될 시간을 제공
+                await page.wait_for_timeout(2000)
+                post_locator = page.locator(f"a[href^='/{username}/p/']")
 
-            print("페이지 스크롤 완료")
+                # 게시물 요소가 하나도 없다면 비공개 계정으로 간주.
+                if await post_locator.count() == 0:
+                    raise ProfileIsPrivateException(f"'{username}' 계정은 비공개이거나 게시물이 없습니다.")
+                
+                print("페이지 스크롤 시작...")
+                # 페이지의 모든 게시물을 로드하기 위해 아래로 스크롤
+                last_height = await page.evaluate("document.body.scrollHeight")
+                while True:
+                    await page.evaluate("window.scrollTo(0, document.body.scrollHeight);")
+                    await page.wait_for_timeout(2000) # 새 콘텐츠가 로드될 때까지 대기
+                    new_height = await page.evaluate("document.body.scrollHeight")
+                    if new_height == last_height:
+                        break
+                    last_height = new_height
 
-            # 스크롤 후 최종 페이지 콘텐츠 다시 가져오기
-            final_page_content = await page.content()
+                print("페이지 스크롤 완료")
+
+                # 스크롤 후 최종 페이지 콘텐츠 다시 가져오기
+                final_page_content = await page.content()
+
+            except TimeoutError:
+                raise ScrapeTimeoutException(f"'{username}' 계정을 스크래핑하는 중 타임아웃이 발생했습니다.")
 
             # BeautifulSoup을 사용하여 이미지 URL 파싱
             print("이미지 URL 파싱 시작...")
