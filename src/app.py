@@ -3,7 +3,7 @@ from flask import Flask, render_template, request, jsonify, Response
 from .scraper import scrape_profile_page, ProfileNotFoundException, ProfileIsPrivateException, ScrapeTimeoutException
 from .utils import download_images_as_bytes, create_zip_in_memory
 
-app = Flask(__name__)
+app = Flask(__name__, template_folder='../templates', static_folder='../static')
 
 @app.route('/')
 def index():
