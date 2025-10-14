@@ -1,8 +1,11 @@
 import asyncio
 import aiohttp
+import logging
 from typing import List, Tuple
 import zipfile
 import io
+
+logger = logging.getLogger(__name__)
 
 async def download_images_as_bytes(image_urls: List[str]) -> List[Tuple[str, bytes]]:
     """
@@ -26,15 +29,19 @@ async def _fetch_image(session: aiohttp.ClientSession, url: str) -> Tuple[str, b
                 # URL의 마지막 부분을 파일명으로 사용
                 filename = url.split('/')[-1].split('?')[0]
                 image_bytes = await response.read()
-                print(f"다운로드 성공: {filename}")
+                logger.info(f"다운로드 성공: {filename}")
                 return (filename, image_bytes)
             else:
-                print(f"다운로드 실패 (상태 코드: {response.status}): {url}")
+                logger.warning(f"다운로드 실패 (상태 코드: {response.status}): {url}")
                 return None
         
     except Exception as e:
-        print(f"다운로드 중 오류 발생: {url}, 오류: {e}")
+        logger.error(f"다운로드 중 오류 발생: {url}, 오류: {e}", exc_info=True)
         return None
+
+class ZipCreationException(Exception):
+    """ZIP 파일 생성 중 오류가 발생했을 때의 예외"""
+    pass
     
 def create_zip_in_memory(image_data: List[Tuple[str, bytes]]) -> bytes:
     """
@@ -42,10 +49,14 @@ def create_zip_in_memory(image_data: List[Tuple[str, bytes]]) -> bytes:
     해당 ZIP 파일의 바이트를 반환합니다.
     """
     zip_buffer = io.BytesIO()
-    with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
-        for filename, data in image_data:
-            zip_file.writestr(filename, data)
+    try:
+        with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
+            for filename, data in image_data:
+                zip_file.writestr(filename, data)
     
-    # 버퍼의 시작으로 포인터를 이동
-    zip_buffer.seek(0)
-    return zip_buffer.getvalue()
+        # 버퍼의 시작으로 포인터를 이동
+        zip_buffer.seek(0)
+        return zip_buffer.getvalue()
+    except Exception as e:
+        logger.error(f"Failed to create ZIP file: {e}", exc_info=True)
+        raise ZipCreationException("ZIP 파일 생성 중 오류가 발생했습니다.")

@@ -1,7 +1,7 @@
 import asyncio
 from flask import Flask, render_template, request, jsonify, Response
 from .scraper import scrape_profile_page, ProfileNotFoundException, ProfileIsPrivateException, ScrapeTimeoutException
-from .utils import download_images_as_bytes, create_zip_in_memory
+from .utils import download_images_as_bytes, create_zip_in_memory, ZipCreationException
 
 app = Flask(__name__, template_folder='../templates', static_folder='../static')
 
@@ -45,8 +45,10 @@ def download():
         return jsonify({'error': f"'{username}' 계정은 비공개이거나 게시물이 없습니다."}), 403
     except ScrapeTimeoutException as e:
         return jsonify({'error': '인스타그램에서 응답이 없어 시간 초과되었습니다. 잠시 후 다시 시도해주세요.'}), 408 # 408 Request Timeout
+    except ZipCreationException as e:
+        return jsonify({'error': 'ZIP 파일 생성 중 오류가 발생했습니다.'}), 500
     except Exception as e:
-        print(f"알 수 없는 오류 발생: {e}")
+        app.logger.error(f"An unexpected error occurred: {e}", exc_info=True)
         return jsonify({'error': '알 수 없는 오류가 발생했습니다. 서버 로그를 확인하세요.'}), 500
     
 

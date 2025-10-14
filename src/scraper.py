@@ -1,9 +1,12 @@
 # 인스타그램 스크래핑을 위한 핵심 로직을 포함할 파일
 import asyncio
+import logging
 from playwright.async_api import async_playwright, TimeoutError
 from bs4 import BeautifulSoup
 from typing import List
 from .browser_manager import get_authenticated_page, CookieFileNotFoundException
+
+logger = logging.getLogger(__name__)
 
 # 사용자 정의 예외
 class ProfileNotFoundException(Exception):
@@ -23,7 +26,7 @@ async def scrape_profile_page(username: str) -> List[str]:
     주어진 인스타그램 계정 페이지로 이동하여 모든 게시물이 로드될 때까지 스크롤하고,
     모든 게시물 이미지의 URL을 추출하여 리스트로 반환합니다.
     """
-    print(f"'{username}' 계정 스크래핑 시작...")
+    logger.info(f"'{username}' 계정 스크래핑 시작...")
 
     async with async_playwright() as p:
         async with get_authenticated_page(p) as page:
@@ -47,7 +50,7 @@ async def scrape_profile_page(username: str) -> List[str]:
                 if await post_locator.count() == 0:
                     raise ProfileIsPrivateException(f"'{username}' 계정은 비공개이거나 게시물이 없습니다.")
                 
-                print("페이지 스크롤 시작...")
+                logger.info("페이지 스크롤 시작...")
                 # 페이지의 모든 게시물을 로드하기 위해 아래로 스크롤
                 last_height = await page.evaluate("document.body.scrollHeight")
                 while True:
@@ -58,7 +61,7 @@ async def scrape_profile_page(username: str) -> List[str]:
                         break
                     last_height = new_height
 
-                print("페이지 스크롤 완료")
+                logger.info("페이지 스크롤 완료.")
 
                 # 스크롤 후 최종 페이지 콘텐츠 다시 가져오기
                 final_page_content = await page.content()
@@ -67,7 +70,7 @@ async def scrape_profile_page(username: str) -> List[str]:
                 raise ScrapeTimeoutException(f"'{username}' 계정을 스크래핑하는 중 타임아웃이 발생했습니다.")
 
             # BeautifulSoup을 사용하여 이미지 URL 파싱
-            print("이미지 URL 파싱 시작...")
+            logger.info("이미지 URL 파싱 시작...")
             soup = BeautifulSoup(final_page_content, "lxml")
             img_tags = soup.find_all('img')
 
@@ -77,15 +80,17 @@ async def scrape_profile_page(username: str) -> List[str]:
                 if 'src' in img.attrs and 'scontent' in img['src']:
                     image_urls.add(img['src'])
 
-            print(f"총 {len(image_urls)}개의 고유한 이미지 URL을 찾았습니다.")
+            logger.info(f"총 {len(image_urls)}개의 고유한 이미지 URL을 찾았습니다.")
             return list(image_urls)
 
 # 직접 실행하여 테스트 python scraper.py
 if __name__ == '__main__':
+    # 로깅 기본 설정(테스트 실행 시에만)
+    logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
     # 테스트할 계정명(존재하지 않는 계정, 비공개 계정 등으로 변경하며 테스트)
     test_username = "xyzcuxvic"
     try:
         image_urls = asyncio.run(scrape_profile_page(test_username))
-        print(f"총 {len(image_urls)}개의 이미지를 성공적으로 스크랩했습니다.")
+        logger.info(f"총 {len(image_urls)}개의 이미지를 성공적으로 스크랩했습니다.")
     except (ProfileNotFoundException, ProfileIsPrivateException, CookieFileNotFoundException) as e:
-        print(f"오류: {e}")
+        logger.error(f"오류: {e}")
